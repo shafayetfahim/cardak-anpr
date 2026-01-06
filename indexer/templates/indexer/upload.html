@@ -1,0 +1,18 @@
+<h2>Cardak ANPR: Ingestion</h2>
+
+{% if success %}
+    <div style="color: green; background-color: #e6fffa; border: 1px solid #38b2ac; padding: 15px; margin-bottom: 20px; border-radius: 5px;">
+        <strong>Asset Enqueued!</strong><br>
+        Vehicle ID: <code>{{ asset.id }}</code> is now being processed by the worker.
+        Check the logs or refresh the admin gallery in a few moments.
+    </div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" style="padding: 10px 20px; cursor: pointer;">Identify Vehicle</button>
+</form>
+
+<hr style="margin: 30px 0;">
+<p><a href="/admin/indexer/vehicleasset/">View Processing Results in Admin &rarr;</a></p>

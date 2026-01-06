@@ -1,8 +1,9 @@
 django
-django-environ
 psycopg2-binary
+pillow
 redis
-selenium
-tensorflow
-opencv-python
-requests
+easyocr
+opencv-python-headless
+requests  # For the NHTSA API
+torch
+torchvision

@@ -1,17 +1,15 @@
 FROM python:3.12-slim-bookworm
 
-# Install Chromium for headless scraping
+# Only need these for OpenCV
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium \
-    chromium-driver \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
-
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROME_DRIVER=/usr/bin/chromedriver
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
-CMD ["python", "worker/main.py"]
+WORKDIR /app/worker
+CMD ["python", "main.py"]
