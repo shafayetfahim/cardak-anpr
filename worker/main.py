@@ -1,66 +1,48 @@
-import requests
-import json
-import redis
-import psycopg2
-import time
+import requests, json, redis, psycopg2, time, os
 from ocr_engine import extract_plate
+from scraper_engine import get_vehicle_specs
+from dotenv import load_dotenv
 
-# Initialize Redis
-r = redis.Redis(host='redis', port=6379, decode_responses=True)
-
+load_dotenv()
+r = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 def update_db(asset_id, plate, specs):
-    """Saves the final results to PostgreSQL."""
     try:
-        conn = psycopg2.connect(
-            dbname="cardak_db", user="user", password="password", host="db"
-        )
+        conn = psycopg2.connect(dbname="cardak_db", user="user", password="password", host="localhost")
         cur = conn.cursor()
-        cur.execute("""
-            UPDATE indexer_vehicleasset 
-            SET license_plate = %s, model = %s, status = 'COMPLETED'
-            WHERE id = %s
-        """, (plate, specs, asset_id))
+        cur.execute("UPDATE indexer_vehicleasset SET license_plate = %s, model = %s, status = 'COMPLETED' WHERE id = %s", (plate, specs, asset_id))
         conn.commit()
         cur.close()
         conn.close()
-        print(f"Successfully updated database for Asset ID: {asset_id}")
     except Exception as e:
-        print(f"Database update failed: {e}")
-
+        print(f"DB Error: {e}")
 
 def get_nhtsa_data(vin):
-    """Enriches the data using the free NHTSA API."""
+    if not vin: return None
     url = f"https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/{vin}?format=json"
     try:
-        response = requests.get(url, timeout=10)
-        data = {item['Variable']: item['Value'] for item in response.json().get('Results', []) if item['Value']}
-        return f"{data.get('Model Year', '')} {data.get('Make', '')} {data.get('Model', '')}".strip()
-    except Exception as e:
-        print(f"API Error: {e}")
-        return "Unknown Vehicle"
-
+        res = requests.get(url, timeout=10).json()
+        d = {i['Variable']: i['Value'] for i in res.get('Results', []) if i['Value']}
+        return f"{d.get('Model Year', '')} {d.get('Make', '')} {d.get('Model', '')}".strip()
+    except:
+        return None
 
 def main():
-    print("Worker started. Listening for tasks...")
+    print("Worker started. Listening for tasks...", flush=True)
     while True:
-        try:
-            result = r.brpop("ocr_tasks", timeout=0)
-            if not result: continue
-            _, message = result
-            task = json.loads(message)
-
-            # Step 1: AI OCR
-            plate = extract_plate(task['image_path'])
-            if plate:
-                # Step 2: API Enrichment
-                specs = get_nhtsa_data("5YJ3E1EB8JF")
-                # Step 3: Persist
-                update_db(task['asset_id'], plate, specs)
-        except Exception as e:
-            print(f"Worker Loop Error: {e}")
-            time.sleep(2)
-
+        res = r.brpop("ocr_tasks", timeout=0)
+        if not res: continue
+        task = json.loads(res[1])
+        plate = extract_plate(task['image_path'])
+        
+        if plate:
+            specs = get_vehicle_specs(plate)
+            
+            if not specs:
+                surrogate = os.getenv("SURROGATE_VIN")
+                specs = get_nhtsa_data(surrogate)
+            
+            update_db(task['asset_id'], plate, specs or "Unknown Vehicle")
 
 if __name__ == "__main__":
     main()
